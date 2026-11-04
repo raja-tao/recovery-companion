@@ -41,8 +41,12 @@ RUN npx cap add android \
  && ANDROID_ALLOW_HTTP=${ANDROID_ALLOW_HTTP} APP_VERSION_NAME=${APP_VERSION_NAME} APP_VERSION_CODE=${APP_VERSION_CODE} \
     node scripts/configure-android.mjs \
  && npx cap sync android
-# Download Gradle and the Android Gradle plugin dependencies in their own layer (cached between builds).
-RUN cd android && for i in 1 2 3; do ./gradlew --no-daemon -q help && break || sleep 10; done
+# Fetch the Gradle distribution with curl (retries, follows the GitHub redirect) and point the wrapper at the
+# local file, then resolve the Android Gradle plugin dependencies in their own cached layer.
+RUN url=$(sed -n 's/^distributionUrl=//p' android/gradle/wrapper/gradle-wrapper.properties | sed 's/\\:/:/g') \
+ && curl -fL --retry 5 --retry-delay 5 --retry-all-errors -o /opt/gradle-dist.zip "$url" \
+ && sed -i 's#^distributionUrl=.*#distributionUrl=file\\:///opt/gradle-dist.zip#' android/gradle/wrapper/gradle-wrapper.properties \
+ && cd android && ./gradlew --no-daemon -q help
 RUN cd android && ./gradlew --no-daemon -q assembleDebug \
  && cp app/build/outputs/apk/debug/app-debug.apk /app/recovery-companion-debug.apk \
  && rm -rf app/build .gradle build
