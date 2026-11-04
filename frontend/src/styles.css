@@ -1,0 +1,24 @@
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 2000;
+  background: #fff;
+  color: #0b6e75;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.skip-link:focus {
+  left: 8px;
+}
+:focus-visible {
+  outline: 3px solid #2e90fa;
+  outline-offset: 2px;
+}
+body {
+  -webkit-font-smoothing: antialiased;
+}
+.prewrap {
+  white-space: pre-wrap;
+}

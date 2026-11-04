@@ -1,0 +1,17 @@
+{
+  "name": "recovery-companion-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Android app shell (Capacitor) for the Recovery Companion web app. Built in Docker: make android.",
+  "scripts": {
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "6.2.0",
+    "@capacitor/app": "6.0.2",
+    "@capacitor/core": "6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "6.2.0"
+  }
+}

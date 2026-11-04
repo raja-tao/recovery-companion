@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+dist/
+.venv/
+.DS_Store
+coverage/
+*.log
+tests/e2e/screenshots/

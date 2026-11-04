@@ -1,0 +1,67 @@
+# Post-Surgical Recovery Companion — local POC stack.
+# Start everything:   docker compose up --build      (or: make dev)
+# App:                http://localhost:8080
+# API docs (OpenAPI): http://localhost:8080/api/docs
+#
+# Secrets come from .env (copy .env.example). The ${VAR:-default} values below are
+# development-only placeholders; the backend refuses to start with them when
+# APP_ENV=production.
+
+name: recovery-companion
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-recovery}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recovery_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-recovery}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recovery} -d ${POSTGRES_DB:-recovery}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-recovery}:${POSTGRES_PASSWORD:-recovery_dev_only}@db:5432/${POSTGRES_DB:-recovery}
+      TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-recovery}:${POSTGRES_PASSWORD:-recovery_dev_only}@db:5432/recovery_test
+      APP_ENV: ${APP_ENV:-development}
+      SEED_ON_STARTUP: ${SEED_ON_STARTUP:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    # Not published by default: the web container proxies /api. Uncomment for direct access.
+    # ports:
+    #   - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./knowledge:/app/knowledge:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health').status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  pgdata:
