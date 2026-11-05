@@ -4,11 +4,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from app.api import (
     admin, ai, ai_agents, alerts, auth, caregiver, content, demo, integrations, patients, transport, wellbeing,
@@ -84,6 +85,9 @@ def create_app() -> FastAPI:
               admin.router, ai_agents.router, integrations.router, transport.router, wellbeing.router, demo.router):
         app.include_router(r, prefix=s.api_prefix)
 
+    if s.static_dir:
+        _serve_web_app(app, Path(s.static_dir).resolve())
+
     @app.exception_handler(RequestValidationError)
     async def validation_handler(request: Request, exc: RequestValidationError):
         # Don't echo submitted values back (may contain PHI).
@@ -96,6 +100,21 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
     return app
+
+
+def _serve_web_app(app: FastAPI, root: Path) -> None:
+    """Serve the built SPA: real files as-is, every other non-API path → index.html (client-side routing)."""
+    index = root / "index.html"
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def web_app(path: str):
+        if path.startswith((get_settings().api_prefix.strip("/") + "/", "assets/")) and not (root / path).is_file():
+            return JSONResponse(status_code=404, content={"detail": "Not Found"})
+        target = (root / path).resolve()
+        if path and target.is_file() and target.is_relative_to(root):
+            cache = "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache"
+            return FileResponse(target, headers={"Cache-Control": cache})
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
 app = create_app()

@@ -1,0 +1,43 @@
+# Render Blueprint: Dashboard → New → Blueprint → connect this repository → Apply.
+# One Docker web service (API + web app on the same origin) and a Postgres database (pgvector is enabled
+# by the app on first start). Synthetic data only — not for real patient data.
+databases:
+  - name: recovery-companion-db
+    plan: free
+    databaseName: recovery
+    user: recovery
+
+services:
+  - type: web
+    name: recovery-companion
+    runtime: docker
+    plan: free
+    dockerfilePath: ./docker/render.Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: recovery-companion-db
+          property: connectionString
+      - key: APP_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FIELD_ENCRYPTION_KEY
+        generateValue: true
+      - key: INTEGRATION_DEMO_KEY
+        generateValue: true
+      # Password for the seeded demo accounts — choose one when you apply the Blueprint.
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: SEED_ON_STARTUP
+        value: "true"
+      - key: LLM_PROVIDER
+        value: claude
+      # Optional: without it the assistant quotes approved content (extractive fallback).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://localhost,capacitor://localhost

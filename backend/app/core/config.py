@@ -9,6 +9,7 @@ import base64
 import hashlib
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-only-insecure-jwt-secret-change-me"
@@ -66,6 +67,9 @@ class Settings(BaseSettings):
     outbound_fhir_url: str = ""
     outbound_fhir_token: str = ""
 
+    # Directory with the built web app; when set, the API also serves the SPA (single-service deploys, e.g. Render).
+    static_dir: str = ""
+
     seed_on_startup: bool = True
     # Includes the Android app's WebView origins (Capacitor serves the bundled app from https://localhost).
     cors_origins: str = "http://localhost:5173,http://localhost:8080,https://localhost,capacitor://localhost"
@@ -76,13 +80,30 @@ class Settings(BaseSettings):
     target_followup_attendance: float = 0.90
     target_red_alert_contact_minutes: int = 15
 
+    @field_validator("database_url", "test_database_url")
+    @classmethod
+    def _psycopg_driver(cls, v: str | None) -> str | None:
+        """Hosting platforms hand out postgres:// / postgresql:// URLs; SQLAlchemy needs the psycopg driver named."""
+        if v:
+            for prefix in ("postgres://", "postgresql://"):
+                if v.startswith(prefix):
+                    return "postgresql+psycopg://" + v[len(prefix):]
+        return v
+
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"
 
     def fernet_key(self) -> bytes:
         if self.field_encryption_key:
-            return self.field_encryption_key.encode()
+            key = self.field_encryption_key.encode()
+            try:
+                if len(base64.urlsafe_b64decode(key)) == 32:
+                    return key  # already a Fernet key
+            except ValueError:
+                pass
+            # Any other high-entropy secret (e.g. a platform-generated value) is hashed into a Fernet key.
+            return base64.urlsafe_b64encode(hashlib.sha256(b"fernet:" + key).digest())
         # Dev/test only: derive a stable key from the JWT secret.
         return base64.urlsafe_b64encode(hashlib.sha256(("fernet:" + self.jwt_secret).encode()).digest())
 

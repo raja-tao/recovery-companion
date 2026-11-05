@@ -43,6 +43,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response
 
 
+SPA_CSP = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+           "font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'")
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -52,7 +56,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         h.setdefault("Referrer-Policy", "no-referrer")
         h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-        if request.url.path.endswith(("/docs", "/redoc")):
+        if not request.url.path.startswith(get_settings().api_prefix + "/"):
+            # The web app itself (single-service deploys): same policy as docker/nginx.conf.
+            h.setdefault("Content-Security-Policy", SPA_CSP)
+        elif request.url.path.endswith(("/docs", "/redoc")):
             h.setdefault("Content-Security-Policy", "default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
                                                     "img-src 'self' data: https://fastapi.tiangolo.com")
         else:
